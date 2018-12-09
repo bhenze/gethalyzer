@@ -11,6 +11,8 @@ import (
 	"os"
 	"strings"
 
+	simpleContract "github.com/HashRebel/gethalyzer/contracts"
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -94,9 +96,9 @@ func runEthalyzer(cmd *cobra.Command, args []string) {
 	// TODO: Add new tests
 	tests := []test{
 		{Name: "Test: Send Eth - single tx", test: test1, Description: "Single simple TX: Transfer 3 eth.", FromAccount: fmt.Sprintf("Main (%s)", mainAddress), ToAccount: fmt.Sprintf("Hash Rebel (%s)", hashRebelAddress), Contract: "", Amount: 3},
-		{Name: "Test: Send Eth - multipule tx", test: test1, Description: "Multipule simple TX: Transfer 1 eth 20 accounts.", FromAccount: "Main (0x TODO)", ToAccount: "multipule", Contract: "", Amount: 0.1},
-		{Name: "Test: Contract - creation", test: test1, Description: "Contract Creation TX", FromAccount: "Main (0x TODO)", ToAccount: "", Contract: basicContract, Amount: 0},
-		{Name: "Test: Contract - update", test: test1, Description: "Interact with existing contract.", FromAccount: "Main (0x TODO)", ToAccount: "", Contract: "", Amount: 0},
+		//{Name: "Test: Send Eth - multipule tx", test: test1, Description: "Multipule simple TX: Transfer 1 eth 20 accounts.", FromAccount: "Main (0x TODO)", ToAccount: "multipule", Contract: "", Amount: 0.1},
+		{Name: "Test: Contract - creation", test: test2, Description: "Contract Creation TX", FromAccount: fmt.Sprintf("Main (%s)", mainAddress), ToAccount: "", Contract: basicContract, Amount: 0},
+		//{Name: "Test: Contract - update", test: test1, Description: "Interact with existing contract.", FromAccount: "Main (0x TODO)", ToAccount: "", Contract: "", Amount: 0},
 	}
 
 	templates := &promptui.SelectTemplates{
@@ -183,7 +185,7 @@ func test1() {
 	gasLimit := uint64(21000) // in units
 	// Giving myself plenty of gas
 	gasPrice := big.NewInt(5000000000000) // in wei (5000 gwei)
-	fmt.Println("Setting up gas. gasLimit: ", amountWei, " gasPrice: ", gasPrice)
+	fmt.Println("Setting up gas. gasLimit: ", amountWei, " gagisPrice: ", gasPrice)
 
 	// Get the address to send the eth too
 	toAddress := common.HexToAddress(hashRebelAddress)
@@ -205,6 +207,59 @@ func test1() {
 	}
 
 	fmt.Printf("tx sent: %s \n", signedTx.Hash().Hex())
+
+	fmt.Printf("************* Wait for the geth logs and then hit enter *************\n\n")
+}
+
+// Consider passing in new test data type (struct with needed data)
+func test2() {
+	fmt.Println("Running Test")
+
+	mainBalance := getBalance(mainAddress)
+	hashRebelBalance := getBalance(hashRebelAddress)
+
+	fmt.Println("Initial main account balance: ", mainBalance)
+	fmt.Println("Initial Hash Rebel account balance: ", hashRebelBalance)
+
+	// Get private key
+	privateKey, err := crypto.HexToECDSA(mainPrivateKey)
+	if err != nil {
+		log.Fatal("error getting private key: ", err)
+	}
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		log.Fatal("error casting public key to ECDSA: ", err)
+	}
+	fmt.Println("Setting up the private key")
+
+	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
+
+	nonce, err := ethClient.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		log.Fatal("Error getting the next nonce: ", err)
+	}
+	gasPrice, err := ethClient.SuggestGasPrice(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	auth := bind.NewKeyedTransactor(privateKey)
+	auth.Nonce = big.NewInt(int64(nonce))
+	auth.Value = big.NewInt(0)     // in wei
+	auth.GasLimit = uint64(300000) // in units
+	auth.GasPrice = gasPrice
+
+	input := big.NewInt(1)
+	address, tx, instance, err := simpleContract.DeploySimpleContract(auth, ethClient, input)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(address.Hex())   // 0x147B8eb97fD247D06C4006D269c90C1908Fb5D54
+	fmt.Println(tx.Hash().Hex()) // 0xdae8ba5444eefdc99f4d45cd0c4f24056cba6a02cefbf78066ef9f4188ff7dc0
+
+	_ = instance
 
 	fmt.Printf("************* Wait for the geth logs and then hit enter *************\n\n")
 }
@@ -234,7 +289,7 @@ func init() {
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
-	rootCmd.PersistentFlags().StringVarP(&logFile, "logfile", "l", "$HOME/node1-minder.log", "geth miner log output file (default is $HOME/node1-minder.log)")
+	rootCmd.PersistentFlags().StringVarP(&logFile, "logfile", "l", "Source/rebelnet/node1-miner.log", "geth miner log output file (default is $HOME/Source/rebelnet/node1-miner.log)")
 	rootCmd.PersistentFlags().StringVarP(&gethURI, "gethuri", "g", "http://localhost:8501", "URI to the geth node RPC Apis (default is 'http://localhost:8501')")
 }
 
@@ -261,8 +316,6 @@ func monitorGethLogs() {
 	if err != nil {
 		log.Fatal("Unable to load the log file", err)
 	}
-
-	fmt.Println("TESTING THIS SHIT!!!!")
 
 	// Print new lines as they are added to the log file
 	for {

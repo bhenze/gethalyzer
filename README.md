@@ -5,6 +5,7 @@ Demo tool meant to analyze custom geth logs for an interview with Kaliedo
 
 * Should I make a new log level for the logs?
 * When an error occurs in the worker, why do we shift() vs pop() some tx requests vs others? - e.g. miner/miner/worker.go:commitTransactions:777
+* I would expect the balances on my accounts to change once the transaction has been added to block. However, after the block is mined the balances for both accounts remain this same. What am I missing here? 
 
 ---
 
