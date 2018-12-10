@@ -46,6 +46,8 @@ Account: c567982f00db259c2af4a6c7ed7b7e8ba393d695
 
 ### Setup for my private server
 
+My custom geth can be found [here](https://github.com/HashRebel/go-ethereum/tree/mining-trx-logs)
+
 chainid = "hashrebel" = 0x48 0x61 0x73 0x68 0x20 0x52 0x65 0x62 0x65 0x6C = 0x4861736820526562656C = 4.8617×10¹⁹
 
 Download branch to your local go directory (e.g. ```$GOPATH/src/github.com/ethereum```) and build geth
