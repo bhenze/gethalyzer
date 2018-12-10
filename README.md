@@ -122,11 +122,12 @@ For the sake of time and because I am still learning golang, I made took lots of
 
 * ~~Should I make a new log level for the logs? (answer: ended up using a stamp in the logs~~
 * When an error occurs in the worker, why do we shift() vs pop() some tx requests vs others? - e.g. miner/miner/worker.go:commitTransactions:777 (too low of nonce would mean it is taken, but too high and you can just set the nonce higher?)
-* I would expect the balances on my accounts to change once the transaction has been added to block. However, after the block is mined the balances for both accounts remain this same. What am I missing here? 
+* I would expect the balances on my accounts to change once the transaction has been added to block. However, after the block is mined the balances for both accounts remain this same. What am I missing here?
 * When I run the out of gas test it looks like the miner attempts to put the transaction in the block a whole bunch of time. How does it determine retries?
 
 ### Gethalyzer 2.0
 
+* Learn more about the transaction pool.
 * Cleanup and beautify the log returns from geth.
 * Would be kinda fund to have some sort of stack visualization tool. Maybe another add a ```stack``` command to gethalyzer.
 * Setup docker containers in order to easily orchestrate and replicate my private test data.
