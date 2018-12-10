@@ -28,6 +28,8 @@ var (
 	ethClient *ethclient.Client
 )
 
+var quit chan bool
+
 type test struct {
 	Name        string
 	test        func()
@@ -46,6 +48,20 @@ const (
 	secondaryAddress    = "0xc567982f00db259c2af4a6c7ed7b7e8ba393d695"
 	logStamp            = "HASH_REBEL_LOG_STAMP"
 )
+
+const banner = `
+         _          _            _       _    _                   _           _        _       _                 _            _      
+        /\ \       /\ \         / /\    / /\ / /\                /\ \     _  /\ \     /\_\   /\ \               /\ \         /\ \    
+       /  \ \      \_\ \       / / /   / / // /  \              /  \ \   /\_\\ \ \   / / /  /  \ \             /  \ \       /  \ \   
+      / /\ \ \     /\__ \     / /_/   / / // / /\ \            / /\ \ \_/ / / \ \ \_/ / /__/ /\ \ \           / /\ \ \     / /\ \ \  
+     / / /\ \_\   / /_ \ \   / /\ \__/ / // / /\ \ \          / / /\ \___/ /   \ \___/ //___/ /\ \ \         / / /\ \_\   / / /\ \_\ 
+    / /_/_ \/_/  / / /\ \ \ / /\ \___\/ // / /  \ \ \        / / /  \/____/     \ \ \_/ \___\/ / / /        / /_/_ \/_/  / / /_/ / / 
+   / /____/\    / / /  \/_// / /\/___/ // / /___/ /\ \      / / /    / / /       \ \ \        / / /        / /____/\    / / /__\/ /  
+  / /\____\/   / / /      / / /   / / // / /_____/ /\ \    / / /    / / /         \ \ \      / / /    _   / /\____\/   / / /_____/   
+ / / /______  / / /      / / /   / / // /_________/\ \ \  / / /    / / /           \ \ \     \ \ \__/\_\ / / /______  / / /\ \ \     
+/ / /_______\/_/ /      / / /   / / // / /_       __\ \_\/ / /    / / /             \ \_\     \ \___\/ // / /_______\/ / /  \ \ \    
+\/__________/\_\/       \/_/    \/_/ \_\___\     /____/_/\/_/     \/_/               \/_/      \/___/_/ \/__________/\/_/    \_\/   
+`
 
 const basicContract = `pragma solidity ^0.4.17;
 
@@ -70,20 +86,7 @@ contract simplestorage {
 var rootCmd = &cobra.Command{
 	Use:   "gethalyzer",
 	Short: "Custom Geth log analyzer",
-	Long: `
-
-         _          _            _       _    _                   _           _        _       _                 _            _      
-        /\ \       /\ \         / /\    / /\ / /\                /\ \     _  /\ \     /\_\   /\ \               /\ \         /\ \    
-       /  \ \      \_\ \       / / /   / / // /  \              /  \ \   /\_\\ \ \   / / /  /  \ \             /  \ \       /  \ \   
-      / /\ \ \     /\__ \     / /_/   / / // / /\ \            / /\ \ \_/ / / \ \ \_/ / /__/ /\ \ \           / /\ \ \     / /\ \ \  
-     / / /\ \_\   / /_ \ \   / /\ \__/ / // / /\ \ \          / / /\ \___/ /   \ \___/ //___/ /\ \ \         / / /\ \_\   / / /\ \_\ 
-    / /_/_ \/_/  / / /\ \ \ / /\ \___\/ // / /  \ \ \        / / /  \/____/     \ \ \_/ \___\/ / / /        / /_/_ \/_/  / / /_/ / / 
-   / /____/\    / / /  \/_// / /\/___/ // / /___/ /\ \      / / /    / / /       \ \ \        / / /        / /____/\    / / /__\/ /  
-  / /\____\/   / / /      / / /   / / // / /_____/ /\ \    / / /    / / /         \ \ \      / / /    _   / /\____\/   / / /_____/   
- / / /______  / / /      / / /   / / // /_________/\ \ \  / / /    / / /           \ \ \     \ \ \__/\_\ / / /______  / / /\ \ \     
-/ / /_______\/_/ /      / / /   / / // / /_       __\ \_\/ / /    / / /             \ \_\     \ \___\/ // / /_______\/ / /  \ \ \    
-\/__________/\_\/       \/_/    \/_/ \_\___\     /____/_/\/_/     \/_/               \/_/      \/___/_/ \/__________/\/_/    \_\/    
-                                                                                                                                     
+	Long: banner + `                                                                                                                            
 This is a log analyzer that is intended to be used along with a hacked version 
 of Geth which logs output to show the miner transaction logic. This tool is 
 intended for demonstration purposes only and will be used in an interview
@@ -93,20 +96,28 @@ with Kaliedo. Please refer to the ../README.md for more information.
 }
 
 func runEthalyzer(cmd *cobra.Command, args []string) {
+	if len(logFile) == 0 {
+		cmd.Help()
+		return
+	}
+
 	// TODO: Add new tests
 	tests := []test{
-		{Name: "Test: Send Eth - single tx", test: test1, Description: "Single simple TX: Transfer 3 eth.", FromAccount: fmt.Sprintf("Main (%s)", mainAddress), ToAccount: fmt.Sprintf("Hash Rebel (%s)", hashRebelAddress), Contract: "", Amount: 3},
+		{Name: "Test: Send Eth - single tx", test: sendEthTest, Description: "Single simple TX: Transfer 3 eth.", FromAccount: fmt.Sprintf("Main (%s)", mainAddress), ToAccount: fmt.Sprintf("Hash Rebel (%s)", hashRebelAddress), Contract: "", Amount: 3},
 		//{Name: "Test: Send Eth - multipule tx", test: test1, Description: "Multipule simple TX: Transfer 1 eth 20 accounts.", FromAccount: "Main (0x TODO)", ToAccount: "multipule", Contract: "", Amount: 0.1},
-		{Name: "Test: Contract - creation", test: test2, Description: "Contract Creation TX", FromAccount: fmt.Sprintf("Main (%s)", mainAddress), ToAccount: "", Contract: basicContract, Amount: 0},
-		//{Name: "Test: Contract - update", test: test1, Description: "Interact with existing contract.", FromAccount: "Main (0x TODO)", ToAccount: "", Contract: "", Amount: 0},
+		{Name: "Test: Contract - creation", test: sendContractTest, Description: "Contract Creation TX", FromAccount: fmt.Sprintf("Main (%s)", mainAddress), ToAccount: "", Contract: basicContract, Amount: 0},
+		//{Name: "Test: Contract - update", test: sendContractWithoutGasTest, Description: "Interact with existing contract.", FromAccount: "Main (0x TODO)", ToAccount: "", Contract: "", Amount: 0},
+		{Name: "Test: Contract - not enough gas", test: sendContractWithoutGasTest, Description: "Attempt to submit contract without enough gas.", FromAccount: fmt.Sprintf("Main (%s)", mainAddress), ToAccount: "", Contract: "", Amount: 0},
+		{Name: "Test: Contract - nonce too high", test: sendContractTestNonceTooHigh, Description: "Attempt to sumbit a contract with nonce too high.", FromAccount: fmt.Sprintf("Main (%s)", mainAddress), ToAccount: "", Contract: "", Amount: 0},
+		{Name: "Test: Contract - nonce too low", test: sendContractTestNonceTooLow, Description: "Attempt to sumbit a contract with nonce too low.", FromAccount: fmt.Sprintf("Main (%s)", mainAddress), ToAccount: "", Contract: "", Amount: 0},
 	}
 
 	templates := &promptui.SelectTemplates{
 		Label:    "{{ . }}?",
 		Active:   "\U0001F344  {{ .Name | bgCyan | underline }}",
 		Inactive: "   {{ .Name | cyan }}",
-		Selected: "{{ \"*********** \" | red | bold  }}{{ .Name | magenta | bold  }}",
-		Details: `
+		Selected: "\U0001F344  {{ .Name | red | bold  }}",
+		Details: banner + `
 --------- Test Details ----------
 {{ "Name:" | faint }}	{{ .Name }}
 {{ "Description:" | faint }}	{{ .Description }}
@@ -149,7 +160,7 @@ func runEthalyzer(cmd *cobra.Command, args []string) {
 }
 
 // Consider passing in new test data type (struct with needed data)
-func test1() {
+func sendEthTest() {
 	fmt.Println("Running Test")
 
 	mainBalance := getBalance(mainAddress)
@@ -159,18 +170,7 @@ func test1() {
 	fmt.Println("Initial Hash Rebel account balance: ", hashRebelBalance)
 
 	// Get private key
-	privateKey, err := crypto.HexToECDSA(mainPrivateKey)
-	if err != nil {
-		log.Fatal("error getting private key: ", err)
-	}
-	publicKey := privateKey.Public()
-	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
-	if !ok {
-		log.Fatal("error casting public key to ECDSA: ", err)
-	}
-	fmt.Println("Setting up the private key")
-
-	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
+	privateKey, fromAddress := getAddresses()
 
 	nonce, err := ethClient.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {
@@ -211,30 +211,13 @@ func test1() {
 	fmt.Printf("************* Wait for the geth logs and then hit enter *************\n\n")
 }
 
-// Consider passing in new test data type (struct with needed data)
-func test2() {
+func sendContractTest() {
 	fmt.Println("Running Test")
 
-	mainBalance := getBalance(mainAddress)
-	hashRebelBalance := getBalance(hashRebelAddress)
-
-	fmt.Println("Initial main account balance: ", mainBalance)
-	fmt.Println("Initial Hash Rebel account balance: ", hashRebelBalance)
-
 	// Get private key
-	privateKey, err := crypto.HexToECDSA(mainPrivateKey)
-	if err != nil {
-		log.Fatal("error getting private key: ", err)
-	}
-	publicKey := privateKey.Public()
-	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
-	if !ok {
-		log.Fatal("error casting public key to ECDSA: ", err)
-	}
-	fmt.Println("Setting up the private key")
+	privateKey, fromAddress := getAddresses()
 
-	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
-
+	// Get the next nonce
 	nonce, err := ethClient.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {
 		log.Fatal("Error getting the next nonce: ", err)
@@ -256,12 +239,133 @@ func test2() {
 		log.Fatal(err)
 	}
 
-	fmt.Println(address.Hex())   // 0x147B8eb97fD247D06C4006D269c90C1908Fb5D54
-	fmt.Println(tx.Hash().Hex()) // 0xdae8ba5444eefdc99f4d45cd0c4f24056cba6a02cefbf78066ef9f4188ff7dc0
+	fmt.Println("Contract address: ", address.Hex())
+	fmt.Println("Tx Hash: ", tx.Hash().Hex())
 
 	_ = instance
 
 	fmt.Printf("************* Wait for the geth logs and then hit enter *************\n\n")
+}
+
+func sendContractTestNonceTooHigh() {
+	fmt.Println("Running Test")
+
+	// Get private key
+	privateKey, fromAddress := getAddresses()
+
+	// Get the next nonce
+	nonce, err := ethClient.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		log.Fatal("Error getting the next nonce: ", err)
+	}
+	gasPrice, err := ethClient.SuggestGasPrice(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	auth := bind.NewKeyedTransactor(privateKey)
+	auth.Nonce = big.NewInt(int64(nonce + 3))
+	auth.Value = big.NewInt(0)     // in wei
+	auth.GasLimit = uint64(300000) // in units
+	auth.GasPrice = gasPrice
+
+	input := big.NewInt(1)
+	address, tx, instance, err := simpleContract.DeploySimpleContract(auth, ethClient, input)
+
+	if err != nil {
+		fmt.Println("Yeah! An error occurred. Expected: nonce to high; Got:", err)
+	}
+
+	fmt.Println("Address and tx shouldn't exist ", address, tx)
+
+	_ = instance
+
+	fmt.Printf("************* Wait for the geth logs and then hit enter *************\n\n")
+}
+
+func sendContractTestNonceTooLow() {
+	fmt.Println("Running Test")
+
+	// Get private key
+	privateKey, fromAddress := getAddresses()
+
+	// Get the next nonce
+	nonce, err := ethClient.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		log.Fatal("Error getting the next nonce: ", err)
+	}
+	gasPrice, err := ethClient.SuggestGasPrice(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	auth := bind.NewKeyedTransactor(privateKey)
+	auth.Nonce = big.NewInt(int64(nonce - 20))
+	auth.Value = big.NewInt(0)     // in wei
+	auth.GasLimit = uint64(300000) // in units
+	auth.GasPrice = gasPrice
+
+	input := big.NewInt(1)
+	address, tx, instance, err := simpleContract.DeploySimpleContract(auth, ethClient, input)
+
+	if err != nil {
+		fmt.Println("Yeah! An error occurred. Expected: nonce to low; Got:", err)
+	}
+
+	fmt.Println("Address and tx shouldn't exist ", address, tx)
+
+	_ = instance
+
+	fmt.Printf("************* Wait for the geth logs and then hit enter *************\n\n")
+}
+
+func sendContractWithoutGasTest() {
+	fmt.Println("Running Test")
+
+	// Get private key
+	privateKey, fromAddress := getAddresses()
+
+	// Get the next nonce
+	nonce, err := ethClient.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		log.Fatal("Error getting the next nonce: ", err)
+	}
+
+	auth := bind.NewKeyedTransactor(privateKey)
+	auth.Nonce = big.NewInt(int64(nonce))
+	auth.Value = big.NewInt(0) // in wei
+	auth.GasLimit = uint64(0)  // in units
+	auth.GasPrice = big.NewInt(0)
+
+	input := big.NewInt(1)
+	address, tx, instance, err := simpleContract.DeploySimpleContract(auth, ethClient, input)
+	if err != nil {
+		fmt.Printf("************* WORKED *************\n\n", err)
+	}
+
+	fmt.Println("Contract address: ", address.Hex())
+	fmt.Println("Tx Hash: ", tx.Hash().Hex())
+
+	_ = instance
+
+	fmt.Printf("************* Wait for the geth logs and then hit enter *************\n\n")
+}
+
+func getAddresses() (*ecdsa.PrivateKey, common.Address) {
+	// Get private key
+	privateKey, err := crypto.HexToECDSA(mainPrivateKey)
+	if err != nil {
+		log.Fatal("error getting private key: ", err)
+	}
+	publicKey := privateKey.Public()
+	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
+	if !ok {
+		log.Fatal("error casting public key to ECDSA: ", err)
+	}
+	fmt.Println("Setting up the private key")
+
+	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
+	return privateKey, fromAddress
 }
 
 func getBalance(address string) *big.Int {
@@ -289,8 +393,8 @@ func init() {
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
-	rootCmd.PersistentFlags().StringVarP(&logFile, "logfile", "l", "Source/rebelnet/node1-miner.log", "geth miner log output file (default is $HOME/Source/rebelnet/node1-miner.log)")
-	rootCmd.PersistentFlags().StringVarP(&gethURI, "gethuri", "g", "http://localhost:8501", "URI to the geth node RPC Apis (default is 'http://localhost:8501')")
+	rootCmd.PersistentFlags().StringVarP(&logFile, "logfile", "l", "", "geth miner log output file (required)")
+	rootCmd.PersistentFlags().StringVarP(&gethURI, "gethuri", "g", "http://localhost:8501", "URI to the geth node RPC Apis")
 }
 
 // initConfig reads in config file and ENV variables if set.
@@ -298,19 +402,22 @@ func initEthalyzer() {
 	// TODO setup geth connection here. Also start reading from the log file here.
 	var err error
 	ethClient, err = ethclient.Dial(gethURI)
-
-	fmt.Println("logfile: ", logFile)
-	fmt.Println("gethuri:", gethURI)
-
-	// Setup a go routine for watching the logs
-	go monitorGethLogs()
-
 	if err != nil {
 		log.Fatal("Unable to connect to: ", gethURI, "\nError: \n", err)
 	}
+
+	quit = make(chan bool)
+
+	// Setup a go routine for watching the logs
+	go monitorGethLogs()
 }
 
 func monitorGethLogs() {
+	if len(logFile) == 0 {
+		fmt.Println("No log file flag found.")
+		return
+	}
+	// Open the file at the end to skip printing any left over logs
 	location := tail.SeekInfo{Offset: 0, Whence: io.SeekEnd}
 	logTail, err := tail.TailFile(logFile, tail.Config{Follow: true, ReOpen: true, Location: &location})
 	if err != nil {
